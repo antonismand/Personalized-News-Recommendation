@@ -2,95 +2,235 @@ import numpy as np
 import dataset
 
 
-class linucb:
-    def __init__(s, alpha):
-        d = len(dataset.features[0]) * 2
-        s.A = np.array([np.identity(d)] * dataset.n_arms)
-        s.b = np.zeros((dataset.n_arms, d, 1))
-        s.alpha = round(alpha,1)
-        s.algorithm = "LinUCB (α=" + str(s.alpha) + ")"
+class LinUCB:
+    """
+    LinUCB algorithm implementation
+    """
 
-    def choose_arm(s, t, user, pool_idx):
+    def __init__(self, alpha):
+        """
+        Parameters
+        ----------
+        alpha : number
+            LinUCB parameter
+        """
 
-        A = s.A[pool_idx]  # (23, 12, 6)
-        b = s.b[pool_idx]  # (23, 12, 1)
+        d = len(dataset.features[
+                    0]) * 2  # size for A, b matrices: num of features for articles(6) + num of features for users(6) = 12
+        self.A = np.array([np.identity(d)] * dataset.n_arms)
+        self.b = np.zeros((dataset.n_arms, d, 1))
+        self.alpha = round(alpha, 1)
+        self.algorithm = "LinUCB (α=" + str(self.alpha) + ")"
+
+    def choose_arm(self, t, user, pool_idx):
+        """
+         Returns the best arm's index relative to the pool
+         Parameters
+         ----------
+         t : number
+             number of trial
+         user : array
+             user features
+         pool_idx : array of indexes
+             pool indexes for article identification
+         """
+
+        A = self.A[pool_idx]  # (23, 12, 6)
+        b = self.b[pool_idx]  # (23, 12, 1)
         user = np.array([user] * len(pool_idx))  # (23, 6)
 
         A = np.linalg.inv(A)
-        x = np.hstack((user, dataset.features[pool_idx]))  # (23, 12)
+        x = np.hstack((user, dataset.features[
+            pool_idx]))  # (23, 12) The vector x summarizes information of both the user u and arm a
 
         x = x.reshape((len(pool_idx), 12, 1))  # (23, 12, 1)
 
         theta = A @ b  # (23, 12, 1)
 
-        p = np.transpose(theta, (0, 2, 1)) @ x + s.alpha * np.sqrt(
+        p = np.transpose(theta, (0, 2, 1)) @ x + self.alpha * np.sqrt(
             np.transpose(x, (0, 2, 1)) @ A @ x
         )
         return np.argmax(p)
 
-    def update(s, displayed, reward, user, pool_idx):
-        a = pool_idx[displayed]
+
+    def update(self, displayed, reward, user, pool_idx):
+        """
+        Updates algorithm's parameters(matrices) : A,b
+        Parameters
+        ----------
+        displayed : index
+            displayed article index relative to the pool
+        reward : binary
+            user clicked or not
+        user : array
+            user features
+        pool_idx : array of indexes
+            pool indexes for article identification
+        """
+
+        a = pool_idx[displayed]  # displayed article's index
 
         x = np.hstack((user, dataset.features[a]))
         x = x.reshape((12, 1))
 
-        s.A[a] = s.A[a] + x @ np.transpose(x)
-        s.b[a] += reward * x
+        self.A[a] = self.A[a] + x @ np.transpose(x)
+        self.b[a] += reward * x
 
 
-class thompson_sampling:
-    def __init__(s):
-        s.algorithm = "TS"
-        s.alpha = np.ones(dataset.n_arms)
-        s.beta = np.ones(dataset.n_arms)
+class ThompsonSampling:
+    """
+    Thompson sampling algorithm implementation
+    """
 
-    def choose_arm(s, t, user, pool_idx):
-        theta = np.random.beta(s.alpha[pool_idx], s.beta[pool_idx])
+    def __init__(self):
+        self.algorithm = "TS"
+        self.alpha = np.ones(dataset.n_arms)
+        self.beta = np.ones(dataset.n_arms)
+
+    def choose_arm(self, t, user, pool_idx):
+        """
+        Returns the best arm's index relative to the pool
+        Parameters
+        ----------
+        t : number
+            number of trial
+        user : array
+            user features
+        pool_idx : array of indexes
+            pool indexes for article identification
+        """
+
+        theta = np.random.beta(self.alpha[pool_idx], self.beta[pool_idx])
         return np.argmax(theta)
 
-    def update(s, displayed, reward, user, pool_idx):
+    def update(self, displayed, reward, user, pool_idx):
+        """
+        Updates algorithm's parameters(matrices) : A,b
+        Parameters
+        ----------
+        displayed : index
+            displayed article index relative to the pool
+        reward : binary
+            user clicked or not            
+        user : array
+            user features
+        pool_idx : array of indexes
+            pool indexes for article identification
+        """
+
         a = pool_idx[displayed]
 
-        s.alpha[a] += reward
-        s.beta[a] += 1 - reward
+        self.alpha[a] += reward
+        self.beta[a] += 1 - reward
 
 
-class ucb1:
-    def __init__(s, alpha):
-        s.alpha = round(alpha,1)
-        s.algorithm = "UCB1 (α=" + str(s.alpha) + ")"
-        
-        s.q = np.zeros(dataset.n_arms)
-        s.n = np.ones(dataset.n_arms)
+class Ucb1:
+    """
+        UCB 1 algorithm implementation
+    """
+    def __init__(self, alpha):
+        """
+        Parameters
+        ----------
+        alpha : number
+            ucb parameter
+        """
 
-    def choose_arm(s, t, user, pool_idx):
-        ucbs = s.q[pool_idx] + np.sqrt(s.alpha * np.log(t + 1) / s.n[pool_idx])
+        self.alpha = round(alpha, 1)
+        self.algorithm = "UCB1 (α=" + str(self.alpha) + ")"
+
+        self.q = np.zeros(dataset.n_arms)  # average reward for each arm
+        self.n = np.ones(dataset.n_arms)  # number of times each arm was chosen
+
+    def choose_arm(self, t, user, pool_idx):
+        """
+        Returns the best arm's index relative to the pool
+        Parameters
+        ----------
+        t : number
+            number of trial
+        user : array
+            user features
+        pool_idx : array of indexes
+            pool indexes for article identification
+        """
+
+        ucbs = self.q[pool_idx] + np.sqrt(self.alpha * np.log(t + 1) / self.n[pool_idx])
         return np.argmax(ucbs)
 
-    def update(s, displayed, reward, user, pool_idx):
+    def update(self, displayed, reward, user, pool_idx):
+        """
+        Updates algorithm's parameters(matrices) : A,b
+        Parameters
+        ----------
+        displayed : index
+            displayed article index relative to the pool
+        reward : binary
+            user clicked or not            
+        user : array
+            user features
+        pool_idx : array of indexes
+            pool indexes for article identification
+        """
+
         a = pool_idx[displayed]
 
-        s.n[a] += 1
-        s.q[a] += (reward - s.q[a]) / s.n[a]
+        self.n[a] += 1
+        self.q[a] += (reward - self.q[a]) / self.n[a]
 
 
-class egreedy:
-    def __init__(s, epsilon):
-        s.e = round(epsilon, 1)
-        s.algorithm = "egreedy (ε=" + str(s.e) + ")"
-        s.q = np.zeros(dataset.n_arms)
-        s.n = np.zeros(dataset.n_arms)
-        
+class Egreedy:
+    """
+    Epsilon greedy algorithm implementation
+    """
+    def __init__(self, epsilon):
+        """
+        Parameters
+        ----------
+        epsilon : number
+            Egreedy parameter
+        """
 
-    def choose_arm(s, t, user, pool_idx):
+        self.e = round(epsilon, 1)  # epsilon parameter for Egreedy
+        self.algorithm = "Egreedy (ε=" + str(self.e) + ")"
+        self.q = np.zeros(dataset.n_arms)  # average reward for each arm
+        self.n = np.zeros(dataset.n_arms)  # number of times each arm was chosen
+
+    def choose_arm(self, t, user, pool_idx):
+        """
+        Returns the best arm's index relative to the pool
+        Parameters
+        ----------
+        t : number
+            number of trial
+        user : array
+            user features
+        pool_idx : array of indexes
+            pool indexes for article identification
+        """
+
         p = np.random.rand()
-        if p > s.e:
-            return np.argmax(s.q[pool_idx])
+        if p > self.e:
+            return np.argmax(self.q[pool_idx])
         else:
             return np.random.randint(low=0, high=len(pool_idx))
 
-    def update(s, displayed, reward, user, pool_idx):
+    def update(self, displayed, reward, user, pool_idx):
+        """
+        Updates algorithm's parameters(matrices) : A,b
+        Parameters
+        ----------
+        displayed : index
+            displayed article index relative to the pool
+        reward : binary
+            user clicked or not            
+        user : array
+            user features
+        pool_idx : array of indexes
+            pool indexes for article identification
+        """
+
         a = pool_idx[displayed]
 
-        s.n[a] += 1
-        s.q[a] += (reward - s.q[a]) / s.n[a]
+        self.n[a] += 1
+        self.q[a] += (reward - self.q[a]) / self.n[a]
