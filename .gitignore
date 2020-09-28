@@ -1,1 +1,6 @@
 test.ipynb
+test.py
+dataset/*
+.vscode/*
+__pycache__/*
+.ipynb_checkpoints/*
