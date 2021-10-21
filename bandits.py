@@ -7,51 +7,60 @@ class LinUCB:
     LinUCB algorithm implementation
     """
 
-    def __init__(self, alpha):
+    def __init__(self, alpha, context="user"):
         """
         Parameters
         ----------
         alpha : number
             LinUCB parameter
+        context: string
+            'user' or 'both'(item+user): what to use as a feature vector
         """
+        self.n_features = len(dataset.features[0])
+        if context == "user":
+            self.context = 1
+        elif context == "both":
+            self.context = 2
+            self.n_features *= 2
 
-        d = len(dataset.features[
-                    0]) * 2  # size for A, b matrices: num of features for articles(6) + num of features for users(6) = 12
-        self.A = np.array([np.identity(d)] * dataset.n_arms)
-        self.b = np.zeros((dataset.n_arms, d, 1))
+        self.A = np.array([np.identity(self.n_features)] * dataset.n_arms)
+        self.A_inv = np.array([np.identity(self.n_features)] * dataset.n_arms)
+        self.b = np.zeros((dataset.n_arms, self.n_features, 1))
         self.alpha = round(alpha, 1)
-        self.algorithm = "LinUCB (α=" + str(self.alpha) + ")"
+        self.algorithm = "LinUCB (α=" + str(self.alpha) + ", context:" + context + ")"
 
     def choose_arm(self, t, user, pool_idx):
         """
-         Returns the best arm's index relative to the pool
-         Parameters
-         ----------
-         t : number
-             number of trial
-         user : array
-             user features
-         pool_idx : array of indexes
-             pool indexes for article identification
-         """
+        Returns the best arm's index relative to the pool
+        Parameters
+        ----------
+        t : number
+            number of trial
+        user : array
+            user features
+        pool_idx : array of indexes
+            pool indexes for article identification
+        """
 
-        A = self.A[pool_idx]  # (23, 12, 6)
-        b = self.b[pool_idx]  # (23, 12, 1)
-        user = np.array([user] * len(pool_idx))  # (23, 6)
+        A_inv = self.A_inv[pool_idx]
+        b = self.b[pool_idx]
 
-        A = np.linalg.inv(A)
-        x = np.hstack((user, dataset.features[
-            pool_idx]))  # (23, 12) The vector x summarizes information of both the user u and arm a
+        n_pool = len(pool_idx)
 
-        x = x.reshape((len(pool_idx), 12, 1))  # (23, 12, 1)
+        user = np.array([user] * n_pool)
+        if self.context == 1:
+            x = user
+        else:
+            x = np.hstack((user, dataset.features[pool_idx]))
 
-        theta = A @ b  # (23, 12, 1)
+        x = x.reshape(n_pool, self.n_features, 1)
+
+        theta = A_inv @ b
 
         p = np.transpose(theta, (0, 2, 1)) @ x + self.alpha * np.sqrt(
-            np.transpose(x, (0, 2, 1)) @ A @ x
+            np.transpose(x, (0, 2, 1)) @ A_inv @ x
         )
         return np.argmax(p)
-
 
     def update(self, displayed, reward, user, pool_idx):
         """
@@ -69,12 +78,16 @@ class LinUCB:
         """
 
         a = pool_idx[displayed]  # displayed article's index
+        if self.context == 1:
+            x = np.array(user)
+        else:
+            x = np.hstack((user, dataset.features[a]))
 
-        x = np.hstack((user, dataset.features[a]))
-        x = x.reshape((12, 1))
+        x = x.reshape((self.n_features, 1))
 
-        self.A[a] = self.A[a] + x @ np.transpose(x)
+        self.A[a] += x @ x.T
         self.b[a] += reward * x
+        self.A_inv[a] = np.linalg.inv(self.A[a])
 
 
 class ThompsonSampling:
@@ -111,7 +124,7 @@ class ThompsonSampling:
         displayed : index
             displayed article index relative to the pool
         reward : binary
-            user clicked or not            
+            user clicked or not
         user : array
             user features
         pool_idx : array of indexes
@@ -126,8 +139,9 @@ class ThompsonSampling:
 
 class Ucb1:
     """
-        UCB 1 algorithm implementation
+    UCB 1 algorithm implementation
     """
+
     def __init__(self, alpha):
         """
         Parameters
@@ -166,7 +180,7 @@ class Ucb1:
         displayed : index
             displayed article index relative to the pool
         reward : binary
-            user clicked or not            
+            user clicked or not
         user : array
             user features
         pool_idx : array of indexes
@@ -183,6 +197,7 @@ class Egreedy:
     """
     Epsilon greedy algorithm implementation
     """
+
     def __init__(self, epsilon):
         """
         Parameters
@@ -223,7 +238,7 @@ class Egreedy:
         displayed : index
             displayed article index relative to the pool
         reward : binary
-            user clicked or not            
+            user clicked or not
         user : array
             user features
         pool_idx : array of indexes
